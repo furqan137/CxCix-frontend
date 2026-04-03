@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
+  Image,
   Text,
   View,
 } from 'react-native';
@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { Input } from '../../components/ui/Input';
 import { BRAND } from '../../constants/brand';
+import { Images } from '../../constants/images';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
@@ -22,7 +23,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
  * Auth entry — minimal Threads-like layout; wires to Zustand when API exists.
  */
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -42,58 +43,66 @@ export default function LoginScreen({ navigation }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 16 }}
-        >
-          <View className="mb-10 mt-4">
-            <Text className="text-3xl font-bold tracking-tight text-zinc-900">Welcome back</Text>
-            <Text className="mt-2 text-base leading-6 text-zinc-500">
-              Sign in to shape your feed with moods and AI moderation.
+        <View className="flex-1 px-6 pt-10">
+          <View className="items-center">
+            <Image
+              source={Images.logo}
+              resizeMode="contain"
+              style={{ width: '86%', maxWidth: 340, height: 120 }}
+            />
+            <Text className="mt-2 text-center text-2xl font-bold" style={{ color: BRAND.ink }}>
+              Surf Your Mood
+            </Text>
+            <Text className="mt-2 text-center text-sm" style={{ color: BRAND.muted }}>
+              Emotion-Intelligent Social Platform
             </Text>
           </View>
 
-          <View className="rounded-3xl bg-surface-card p-5 shadow-soft">
+          <View className="mt-10">
             <Input
-              label="Email"
-              keyboardType="email-address"
+              label={undefined}
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="Email / Phone / Username"
               autoCapitalize="none"
               autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
+              className="rounded-full px-5 py-4"
             />
             <Input
-              label="Password"
+              label={undefined}
               secureTextEntry
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
+              placeholder="Password"
+              className="rounded-full px-5 py-4"
             />
-            <View className="mt-2">
-              <GradientButton loading={loading} onPress={onSignIn}>
-                Sign in
+
+            <Pressable className="items-end pr-1">
+              <Text className="text-sm font-semibold text-blue-600">Forget Password</Text>
+            </Pressable>
+
+            <View className="mt-6">
+              <GradientButton variant="welcome" loading={loading} onPress={onSignIn}>
+                Log in
               </GradientButton>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.navigate('Signup')}
-              className="mt-6 items-center py-2"
-            >
-              <Text className="text-center text-sm text-zinc-500">
-                New here?{' '}
-                <Text className="font-semibold" style={{ color: BRAND.purpleDeep }}>
-                  Create an account
-                </Text>
-              </Text>
-            </Pressable>
           </View>
 
-          <Text className="mt-8 text-center text-xs leading-5 text-zinc-400">
-            By continuing you agree to our Terms and acknowledge how CxCix uses AI to rank and
-            moderate content.
-          </Text>
-        </ScrollView>
+          <View className="flex-1" />
+
+          <View className="items-center pb-4">
+            <Text className="text-sm text-slate-700">
+              Don’t have an account?{' '}
+              <Text
+                className="font-semibold text-blue-600"
+                onPress={() => navigation.navigate('Signup')}
+                suppressHighlighting
+              >
+                Create account
+              </Text>
+            </Text>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -91,7 +91,11 @@ export default function SettingsScreen({ navigation }: Props) {
         <View className="gap-3">
           <Row icon="lock-closed-outline" label="Privacy Settings" />
           <Row icon="ban-outline" label="Blocked Accounts" onPress={() => navigation.navigate('BlockedAccounts')} />
-          <Row icon="volume-mute-outline" label="Muted Accounts" />
+          <Row
+            icon="volume-mute-outline"
+            label="Muted Accounts"
+            onPress={() => navigation.navigate('MutedAccounts')}
+          />
         </View>
 
         <SectionTitle>AI</SectionTitle>

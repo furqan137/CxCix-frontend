@@ -1,77 +1,112 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Image, Text, View } from 'react-native';
+import * as ExpoSplashScreen from 'expo-splash-screen';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import {
+  Animated,
+  Easing,
+  Image,
+  Text,
+  View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { BRAND } from '../constants/brand';
-import { Images } from '../constants/images';
 import type { RootStackParamList } from '../navigation/types';
 
-const SPLASH_MS = 2800;
+const SPLASH_MS = 3000;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
-/**
- * Brand splash — white canvas, logo asset, “Surf Your Mood” stack (design match).
- */
 export default function SplashScreen({ navigation }: Props) {
+  /* ================= ANIMATION ================= */
+
+  const scale = useRef(new Animated.Value(0.8)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
+
+  useLayoutEffect(() => {
+    ExpoSplashScreen.hideAsync();
+  }, []);
 
   useEffect(() => {
+    // animation
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
         duration: 700,
-        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 700,
-        easing: Easing.out(Easing.cubic),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 6,
+        tension: 80,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [opacity, translateY]);
 
-  useEffect(() => {
+    // navigation
     const t = setTimeout(() => {
       navigation.replace('WelcomeOnboarding');
     }, SPLASH_MS);
+
     return () => clearTimeout(t);
-  }, [navigation]);
+  }, []);
 
   return (
-    <View className="flex-1 items-center justify-center bg-white px-8">
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <StatusBar style="dark" />
-      <Animated.View
+
+      <View
         style={{
-          opacity,
-          transform: [{ translateY }],
+          flex: 1,
           alignItems: 'center',
-          width: '100%',
+          justifyContent: 'center',
+          paddingHorizontal: 24,
         }}
       >
-        <Image
-          source={Images.logo}
-          resizeMode="contain"
-          style={{ width: '88%', maxWidth: 340, height: 120 }}
-          accessibilityLabel="CxCix logo"
-        />
-        <Text
-          className="mt-3 text-center text-2xl font-bold"
-          style={{ color: BRAND.ink }}
+        <Animated.View
+          style={{
+            alignItems: 'center',
+            opacity,
+            transform: [{ scale }],
+          }}
         >
-          Surf Your Mood
-        </Text>
-        <Text
-          className="mt-2 max-w-sm text-center text-sm leading-5"
-          style={{ color: BRAND.subtitle }}
-        >
-          Emotion-Intelligent Social Platform
-        </Text>
-      </Animated.View>
+          {/* LOGO (FROM ICONS FOLDER) */}
+          <Image
+            source={require('../../assets/icons/logo.png')} // ✅ YOUR ICON PATH
+            resizeMode="contain"
+            style={{
+              width: 220,
+              height: 220,
+              marginRight: 70,
+              marginBottom: -70,
+            }}
+          />
+
+
+          {/* SUBTITLE */}
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: '600',
+              color: '#334155',
+              marginBottom: 4,
+            }}
+          >
+            Surf Your Mood
+          </Text>
+
+          {/* TAGLINE */}
+          <Text
+            style={{
+              fontSize: 14,
+              color: '#64748B',
+              textAlign: 'center',
+            }}
+          >
+            Emotion-Intelligent Social Platform
+          </Text>
+        </Animated.View>
+      </View>
     </View>
   );
 }

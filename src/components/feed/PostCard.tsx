@@ -38,20 +38,23 @@ export function PostCard({
   onBookmark,
   onMore,
 }: PostCardProps) {
+  const cardStyle = {
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  } as const;
+
   return (
-    <Pressable
-      onPress={onOpenPost}
-      className="mb-3 rounded-2xl bg-white p-4 shadow-soft"
-      style={{
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
-      }}
-    >
+    <View className="mb-3 rounded-2xl bg-white p-4 shadow-soft" style={cardStyle}>
       <View className="flex-row items-start justify-between">
-        <View className="flex-1 flex-row">
+        <Pressable
+          onPress={onOpenPost}
+          accessibilityRole="button"
+          accessibilityLabel={`Open post by ${author}`}
+          className="flex-1 flex-row"
+        >
           {avatar ? (
             <Image source={avatar} className="h-11 w-11 rounded-full" resizeMode="cover" />
           ) : (
@@ -66,7 +69,7 @@ export function PostCard({
               <Text className="text-sm text-slate-400">· {timeLabel}</Text>
             </View>
           </View>
-        </View>
+        </Pressable>
         <Pressable
           hitSlop={8}
           accessibilityLabel="Save post"
@@ -76,10 +79,12 @@ export function PostCard({
         </Pressable>
       </View>
 
-      <Text className="mt-3 text-[15px] leading-6 text-slate-800">{body}</Text>
+      <Pressable onPress={onOpenPost} accessibilityRole="button" accessibilityLabel="Open post">
+        <Text className="mt-3 text-[15px] leading-6 text-slate-800">{body}</Text>
+      </Pressable>
 
       {image ? (
-        <Pressable onPress={onPressImage} disabled={!onPressImage}>
+        <Pressable onPress={onPressImage} disabled={!onPressImage} accessibilityLabel="View image">
           <Image
             source={image}
             className="mt-3 w-full overflow-hidden rounded-2xl"
@@ -107,7 +112,7 @@ export function PostCard({
           <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
         </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

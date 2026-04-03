@@ -1,8 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, ScrollView, Text, View, Image } from 'react-native';
+import {
+  Dimensions,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { BRAND_GRADIENT } from '../../constants/brand';
 import { Images } from '../../constants/images';
 import { MOOD_LABELS, type MoodId } from '../../constants/moods';
 import { BottomSheetModal } from '../ui/BottomSheetModal';
@@ -13,6 +20,20 @@ type Props = {
   currentMood: MoodId;
   onSwitchMood: (m: MoodId) => void;
 };
+
+/** Figma accent — mood names, icons, “View All”. */
+const MOOD_BLUE = '#4A90E2';
+/** Figma primary CTA — purple → gold. */
+const MOOD_BRIDGES_GRADIENT = ['#6C63FF', '#F5A623'] as const;
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const H_PAD = 24;
+const CHIP_GAP = 12;
+const CHIP_W = (SCREEN_W - H_PAD * 2 - CHIP_GAP) / 2;
+const FULL_ROW_W = SCREEN_W - H_PAD * 2;
+/** Square thumbnails — fixed box + cover avoids stretch; assets stay sharp. */
+const CARD_IMAGE = 148;
+const CARD_GAP = 16;
 
 const SUGGESTIONS: Array<{
   label: string;
@@ -27,13 +48,25 @@ const SUGGESTIONS: Array<{
 ];
 
 const CARDS = [
-  { id: 'econ', title: 'Global Economic\nTrends 2026', image: Images.tileEconomy },
-  { id: 'vr', title: 'Tech Innovation\nSummit Results', image: Images.tileVr },
-  { id: 'dig', title: 'The Future of Digital\nCurrency', image: Images.tileDigital },
+  {
+    id: 'econ',
+    title: 'Global Economic\nTrends 2026',
+    image: Images.moodBridgeExplore.economy,
+  },
+  {
+    id: 'vr',
+    title: 'Tech Innovation\nSummit Results',
+    image: Images.moodBridgeExplore.tech,
+  },
+  {
+    id: 'dig',
+    title: 'The Future of Digital\nCurrency',
+    image: Images.moodBridgeExplore.digital,
+  },
 ];
 
 /**
- * Mood Bridges — suggestion chips + explore tiles + switch/return CTAs (hi-fi).
+ * Mood Bridges — Figma-aligned chips, explore row, CTAs.
  */
 export function MoodBridgesSheet({
   visible,
@@ -42,77 +75,218 @@ export function MoodBridgesSheet({
   onSwitchMood,
 }: Props) {
   return (
-    <BottomSheetModal visible={visible} onClose={onClose} maxHeightRatio={0.84}>
+    <BottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      maxHeightRatio={0.84}
+      topBorderRadius={32}
+      handleWidth={40}
+      handleHeight={4}
+    >
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text className="mt-2 text-center text-2xl font-bold text-slate-900">
+        <Text style={styles.title}>
           You're in {MOOD_LABELS[currentMood]} 😌
         </Text>
 
-        <View className="mt-4 flex-row flex-wrap justify-between gap-y-3">
-          {SUGGESTIONS.map((s) => (
-            <Pressable
-              key={s.target}
-              onPress={() => onSwitchMood(s.target)}
-              className="w-[48%] flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-3"
-            >
-              <Text className="text-xs text-slate-600">{s.label} → </Text>
-              <Text className="text-xs font-semibold text-blue-600">{MOOD_LABELS[s.target]}</Text>
-              <Ionicons name={s.icon} size={16} color="#2563eb" style={{ marginLeft: 8 }} />
-            </Pressable>
-          ))}
+        <View style={styles.chipGrid}>
+          {SUGGESTIONS.map((s, i) => {
+            const fullRow = i === SUGGESTIONS.length - 1;
+            return (
+              <Pressable
+                key={s.target}
+                onPress={() => onSwitchMood(s.target)}
+                style={[
+                  styles.chip,
+                  fullRow ? { width: FULL_ROW_W } : { width: CHIP_W },
+                ]}
+              >
+                <View style={styles.chipTextWrap}>
+                  <Text style={styles.chipLead}>
+                    {s.label}{' '}
+                    <Text style={styles.chipAccent}>→ {MOOD_LABELS[s.target]}</Text>
+                  </Text>
+                </View>
+                <Ionicons name={s.icon} size={18} color={MOOD_BLUE} />
+              </Pressable>
+            );
+          })}
         </View>
 
-        <View className="mt-6 flex-row items-center justify-between">
-          <Text className="text-base font-bold text-slate-900">Explore By Mood</Text>
-          <Pressable>
-            <Text className="text-sm font-semibold text-blue-600">View All</Text>
+        <View style={styles.exploreHeader}>
+          <Text style={styles.exploreTitle}>Explore By Mood</Text>
+          <Pressable hitSlop={8}>
+            <Text style={styles.viewAll}>View All</Text>
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
-          <View className="flex-row gap-3">
-            {CARDS.map((c) => (
-              <View
-                key={c.id}
-                className="w-[160px] overflow-hidden rounded-2xl bg-white shadow-sm"
-              >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.hScrollContent}
+        >
+          {CARDS.map((c, idx) => (
+            <View
+              key={c.id}
+              style={[styles.card, idx < CARDS.length - 1 && { marginRight: CARD_GAP }]}
+            >
+              <View style={styles.cardImageWrap}>
                 <Image
                   source={c.image}
-                  style={{ width: '100%', height: 92 }}
+                  style={styles.cardImage}
                   resizeMode="cover"
                 />
-                <Text className="p-3 text-sm font-semibold text-slate-800">{c.title}</Text>
               </View>
-            ))}
-          </View>
+              <Text style={styles.cardTitle}>{c.title}</Text>
+            </View>
+          ))}
         </ScrollView>
 
         <Pressable
           onPress={() => {
-            // Switch to the first suggestion target for now
             onSwitchMood('serious');
             onClose();
           }}
-          className="mt-6 overflow-hidden rounded-full"
+          style={styles.primaryBtnOuter}
         >
           <LinearGradient
-            colors={[...BRAND_GRADIENT]}
+            colors={[...MOOD_BRIDGES_GRADIENT]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
-            style={{ paddingVertical: 16, alignItems: 'center' }}
+            style={styles.primaryBtnInner}
           >
-            <Text className="text-base font-bold text-white">Switch to Serious</Text>
+            <Text style={styles.primaryBtnText}>Switch to Serious</Text>
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={onClose} className="mt-3 items-center py-3">
-          <Text className="text-base font-bold text-slate-600">Return to Calm</Text>
+        <Pressable
+          onPress={() => {
+            onSwitchMood('calm');
+            onClose();
+          }}
+          style={styles.secondaryBtn}
+        >
+          <Text style={styles.secondaryBtnText}>Return to Calm</Text>
         </Pressable>
       </ScrollView>
     </BottomSheetModal>
   );
 }
 
+const styles = StyleSheet.create({
+  scrollContent: {
+    paddingHorizontal: H_PAD,
+    paddingBottom: 20,
+  },
+  title: {
+    marginTop: 8,
+    marginBottom: 20,
+    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: CHIP_GAP,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  chipTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  chipLead: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  chipAccent: {
+    fontWeight: '600',
+    color: MOOD_BLUE,
+  },
+  exploreHeader: {
+    marginTop: 24,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exploreTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  viewAll: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MOOD_BLUE,
+  },
+  hScrollContent: {
+    paddingBottom: 4,
+  },
+  card: {
+    width: CARD_IMAGE,
+    backgroundColor: '#fff',
+  },
+  cardImageWrap: {
+    width: CARD_IMAGE,
+    height: CARD_IMAGE,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f1f5f9',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardTitle: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    lineHeight: 18,
+  },
+  primaryBtnOuter: {
+    marginTop: 24,
+    borderRadius: 50,
+    overflow: 'hidden',
+  },
+  primaryBtnInner: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  secondaryBtn: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  secondaryBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+  },
+});

@@ -17,6 +17,11 @@ type Props = {
    * Defaults to 0.86 which matches the hi-fi “half sheet”.
    */
   maxHeightRatio?: number;
+  /** Top corner radius (Figma Mood Bridges uses 32). */
+  topBorderRadius?: number;
+  /** Grab handle bar size (default ~48×6). */
+  handleWidth?: number;
+  handleHeight?: number;
 };
 
 const BACKDROP = 'rgba(0,0,0,0.35)';
@@ -29,6 +34,9 @@ export function BottomSheetModal({
   onClose,
   children,
   maxHeightRatio = 0.86,
+  topBorderRadius = 24,
+  handleWidth = 48,
+  handleHeight = 6,
 }: Props) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(40)).current;
@@ -89,8 +97,8 @@ export function BottomSheetModal({
           style={{
             transform: [{ translateY }],
             backgroundColor: '#fff',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: topBorderRadius,
+            borderTopRightRadius: topBorderRadius,
             ...sheetStyle,
             shadowColor: '#0f172a',
             shadowOffset: { width: 0, height: -6 },
@@ -99,8 +107,15 @@ export function BottomSheetModal({
             elevation: 16,
           }}
         >
-          <View className="items-center pb-2 pt-3">
-            <View className="h-1.5 w-12 rounded-full bg-slate-200" />
+          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+            <View
+              style={{
+                width: handleWidth,
+                height: handleHeight,
+                borderRadius: 2,
+                backgroundColor: '#e2e8f0',
+              }}
+            />
           </View>
           {children}
         </Animated.View>

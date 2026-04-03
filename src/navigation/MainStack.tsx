@@ -2,6 +2,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AddCommentaryScreen from '../screens/main/AddCommentaryScreen';
 import BlockedAccountsScreen from '../screens/main/BlockedAccountsScreen';
+import ChatThreadScreen from '../screens/main/ChatThreadScreen';
+import MutedAccountsScreen from '../screens/main/MutedAccountsScreen';
 import ContactSupportScreen from '../screens/main/ContactSupportScreen';
 import CreatePostScreen from '../screens/main/CreatePostScreen';
 import ImageViewerScreen from '../screens/main/ImageViewerScreen';
@@ -51,6 +53,8 @@ export function MainStackNavigator() {
       <Stack.Screen name="AIModeratorInsights" component={AIModeratorInsightsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="BlockedAccounts" component={BlockedAccountsScreen} />
+      <Stack.Screen name="MutedAccounts" component={MutedAccountsScreen} />
+      <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen
         name="ImageViewer"

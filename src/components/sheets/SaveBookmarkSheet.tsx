@@ -1,11 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BRAND_GRADIENT } from '../../constants/brand';
+import { Images } from '../../constants/images';
 import { MOOD_LABELS, MOODS, type MoodId } from '../../constants/moods';
 import { useBookmarksStore } from '../../store/useBookmarksStore';
 import { BottomSheetModal } from '../ui/BottomSheetModal';
+
+/** Figma: blue → purple → gold */
+const BOOKMARK_GRADIENT = ['#5B7FFF', '#A78BFA', '#E9C46A'] as const;
 
 type Draft = {
   author: string;
@@ -20,8 +23,13 @@ type Props = {
   draft?: Draft;
 };
 
+const ICON_SIZE = 28;
+const ROW_R = 16;
+const RING = 2;
+
 /**
- * Save Bookmark sheet — choose mood collection then save (hi-fi BOOKMARKS).
+ * Save Bookmark sheet — Figma: mood icons, gradient selected ring, Save CTA.
+ * Row content must be a single View (not Fragment) so flex row lays out on RN.
  */
 export function SaveBookmarkSheet({ visible, onClose, draft }: Props) {
   const save = useBookmarksStore((s) => s.save);
@@ -40,45 +48,55 @@ export function SaveBookmarkSheet({ visible, onClose, draft }: Props) {
 
   return (
     <BottomSheetModal visible={visible} onClose={onClose} maxHeightRatio={0.78}>
-      <View className="px-5 pb-4">
-        <Text className="text-xs font-bold uppercase tracking-widest text-blue-600">
-          Save Bookmark
-        </Text>
-        <Text className="mt-2 text-xl font-bold text-slate-900">
-          Choose where to save this post
-        </Text>
+      <View style={styles.sheetInner}>
+        <Text style={styles.kicker}>SAVE BOOKMARK</Text>
+        <Text style={styles.title}>Choose where to save this post</Text>
 
-        <View className="mt-5 gap-3">
+        <View style={styles.list}>
           {MOODS.map((m) => {
             const active = selected === m;
+            const iconSource = Images.bookmarkMood[m];
+
+            const rowContent = (
+              <View style={styles.rowContent}>
+                <Image
+                  source={iconSource}
+                  style={{ width: ICON_SIZE, height: ICON_SIZE }}
+                  resizeMode="contain"
+                />
+                <Text style={styles.rowLabel} numberOfLines={2}>
+                  Save for {MOOD_LABELS[m]}
+                </Text>
+                <Radio selected={active} />
+              </View>
+            );
+
+            if (active) {
+              return (
+                <LinearGradient
+                  key={m}
+                  colors={BOOKMARK_GRADIENT}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.ring}
+                >
+                  <Pressable
+                    onPress={() => setSelected(m)}
+                    style={({ pressed }) => [styles.rowActivePressable, pressed && { opacity: 0.95 }]}
+                  >
+                    {rowContent}
+                  </Pressable>
+                </LinearGradient>
+              );
+            }
+
             return (
               <Pressable
                 key={m}
                 onPress={() => setSelected(m)}
-                className="flex-row items-center justify-between rounded-2xl border bg-white px-4 py-4"
-                style={{
-                  borderColor: active ? '#2563eb' : '#e2e8f0',
-                }}
+                style={({ pressed }) => [styles.rowIdle, pressed && { opacity: 0.95 }]}
               >
-                <View className="flex-row items-center">
-                  <View className="h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                    <Text className="text-sm font-bold text-slate-700">
-                      {MOOD_LABELS[m].slice(0, 1)}
-                    </Text>
-                  </View>
-                  <Text className="ml-3 text-[15px] font-semibold text-slate-800">
-                    Save for {MOOD_LABELS[m]}
-                  </Text>
-                </View>
-                <View
-                  className="h-6 w-6 items-center justify-center rounded-full border-2"
-                  style={{
-                    borderColor: active ? '#2563eb' : '#cbd5e1',
-                    backgroundColor: active ? '#2563eb' : 'transparent',
-                  }}
-                >
-                  {active ? <View className="h-2.5 w-2.5 rounded-full bg-white" /> : null}
-                </View>
+                {rowContent}
               </Pressable>
             );
           })}
@@ -89,15 +107,17 @@ export function SaveBookmarkSheet({ visible, onClose, draft }: Props) {
             save({ mood: selected, ...item });
             onClose();
           }}
-          className="mt-6 overflow-hidden rounded-full"
+          style={styles.saveBtnOuter}
+          accessibilityRole="button"
+          accessibilityLabel="Save bookmark"
         >
           <LinearGradient
-            colors={[...BRAND_GRADIENT]}
+            colors={BOOKMARK_GRADIENT}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
-            style={{ paddingVertical: 16, alignItems: 'center' }}
+            style={styles.saveGradient}
           >
-            <Text className="text-base font-bold text-white">Save</Text>
+            <Text style={styles.saveText}>Save</Text>
           </LinearGradient>
         </Pressable>
       </View>
@@ -105,3 +125,109 @@ export function SaveBookmarkSheet({ visible, onClose, draft }: Props) {
   );
 }
 
+function Radio({ selected }: { selected: boolean }) {
+  return (
+    <View
+      style={[
+        styles.radioOuter,
+        {
+          borderColor: selected ? '#2563EB' : '#CBD5E1',
+          backgroundColor: selected ? '#2563EB' : 'transparent',
+        },
+      ]}
+    >
+      {selected ? <View style={styles.radioInner} /> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  sheetInner: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  kicker: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: '#2563EB',
+  },
+  title: {
+    marginTop: 8,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A202C',
+    letterSpacing: -0.3,
+    lineHeight: 26,
+  },
+  list: {
+    marginTop: 20,
+    gap: 12,
+    width: '100%',
+  },
+  ring: {
+    width: '100%',
+    borderRadius: ROW_R + RING,
+    padding: RING,
+  },
+  rowActivePressable: {
+    borderRadius: ROW_R,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  rowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  rowIdle: {
+    width: '100%',
+    borderRadius: ROW_R,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  rowLabel: {
+    flex: 1,
+    marginLeft: 14,
+    marginRight: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+  },
+  saveBtnOuter: {
+    marginTop: 24,
+    borderRadius: 9999,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  saveGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});

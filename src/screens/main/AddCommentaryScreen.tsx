@@ -56,7 +56,12 @@ export default function AddCommentaryScreen({ navigation, route }: Props) {
 
       <ScrollView style={{ backgroundColor: BG }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View className="mb-4 flex-row items-center rounded-2xl bg-white px-4 py-3 shadow-sm">
-          <Ionicons name="bulb-outline" size={20} color="#64748b" />
+          <Image
+            source={Images.perspectiveLightbulb}
+            resizeMode="contain"
+            style={{ width: 22, height: 22 }}
+            accessibilityLabel="Perspective"
+          />
           <Text className="ml-2 text-sm font-semibold text-slate-700">
             Perspective: {perspectiveLabel}
           </Text>

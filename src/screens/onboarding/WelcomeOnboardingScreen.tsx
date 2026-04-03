@@ -1,8 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import { Image, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, Image, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
+import { FadeStagger } from '../../components/animation/FadeStagger';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { BRAND } from '../../constants/brand';
 import { Images } from '../../constants/images';
@@ -10,45 +12,114 @@ import type { RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WelcomeOnboarding'>;
 
-/**
- * Welcome step — hero surf illustration + “Get Started” gradient CTA (hi-fi layout).
- */
 export default function WelcomeOnboardingScreen({ navigation }: Props) {
+  /* ================= ANIMATION ================= */
+
+  const translateX = useRef(new Animated.Value(120)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <StatusBar style="dark" />
-      <View className="flex-1 px-6">
-        <View className="items-center pt-4">
-          <Image
-            source={Images.logo}
-            resizeMode="contain"
-            style={{ width: '100%', maxWidth: 320, height: 96 }}
-            accessibilityLabel="CxCix logo"
-          />
-          <Text className="mt-2 text-center text-2xl font-bold" style={{ color: BRAND.ink }}>
-            Surf Your Mood
-          </Text>
-          <Text
-            className="mt-1 max-w-md text-center text-sm leading-5"
-            style={{ color: BRAND.muted }}
+
+      <View style={{ flex: 1, paddingHorizontal: 24 }}>
+        {/* ================= TOP ================= */}
+        <View style={{ alignItems: 'center', paddingTop: 20 }}>
+          
+          {/* LOGO */}
+          <FadeStagger delayMs={40} variant="rise">
+            <Image
+              source={Images.logo}
+              resizeMode="contain"
+              style={{
+                width: 260,
+                height: 120,
+                marginBottom:-20
+              }}
+            />
+          </FadeStagger>
+
+          {/* TITLE */}
+          <FadeStagger delayMs={100} variant="rise">
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 22,
+                fontWeight: '700',
+                color: '#0f172a',
+                textAlign: 'center',
+              }}
+            >
+              Surf Your Mood
+            </Text>
+          </FadeStagger>
+
+          {/* SUBTITLE */}
+          <FadeStagger delayMs={160} variant="fade">
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 14,
+                color: '#64748B',
+                textAlign: 'center',
+              }}
+            >
+              Emotion-Intelligent Social Platform
+            </Text>
+          </FadeStagger>
+        </View>
+
+        {/* ================= SURF IMAGE ================= */}
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [{ translateX }],
+              opacity,
+            }}
           >
-            Emotion-Intelligent Social Platform
-          </Text>
+            <Image
+              source={Images.welcomeSurf}
+              resizeMode="contain"
+              style={{
+                width: 340,
+                height: 300,
+              }}
+            />
+          </Animated.View>
         </View>
 
-        <View className="flex-1 justify-center py-4">
-          <Image
-            source={Images.welcomeSurf}
-            resizeMode="contain"
-            style={{ width: '100%', height: '100%', maxHeight: 360 }}
-            accessibilityLabel="Surfing moods illustration"
-          />
-        </View>
-
-        <View className="pb-2">
-          <GradientButton variant="welcome" onPress={() => navigation.navigate('AIModeratorIntro')}>
-            Get Started
-          </GradientButton>
+        {/* ================= BUTTON ================= */}
+        <View style={{ paddingBottom: 20 }}>
+          <FadeStagger delayMs={300} variant="rise">
+            <GradientButton
+              variant="welcome"
+              onPress={() => navigation.navigate('AIModeratorIntro')}
+            >
+              Get Started
+            </GradientButton>
+          </FadeStagger>
         </View>
       </View>
     </SafeAreaView>
