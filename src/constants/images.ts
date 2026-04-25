@@ -2,9 +2,6 @@
  * Bundled art: onboarding, feed media, header mark, Shift grid icons.
  */
 export const Images = {
-  /** Create Post floating action button (Figma) */
-  addPostFab: require('../../assets/ui/add-post-fab.png'),
-
   /** Feathers + CxCix wordmark (horizontal, gold outline) — auth + onboarding */
   logo: require('../../assets/ui/brand-logo-wordmark.png'),
   /** Full splash — white canvas + logo + taglines (Figma) */

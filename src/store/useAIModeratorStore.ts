@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type AIMode = 'gentle' | 'balanced' | 'unfiltered';
 
@@ -42,23 +44,37 @@ interface AIModeratorState {
   resetPersonalization: () => void;
 }
 
-export const useAIModeratorStore = create<AIModeratorState>((set) => ({
-  mode: 'gentle',
-  sliders: { ...DEFAULT_SLIDERS },
-  explanations: true,
-  hideToxicReplies: true,
-  setMode: (mode) => set({ mode }),
-  setSlider: (key, value) =>
-    set((s) => ({
-      sliders: { ...s.sliders, [key]: Math.round(value) },
-    })),
-  setExplanations: (explanations) => set({ explanations }),
-  setHideToxicReplies: (hideToxicReplies) => set({ hideToxicReplies }),
-  resetPersonalization: () =>
-    set({
-      mode: 'gentle',
+export const useAIModeratorStore = create<AIModeratorState>()(
+  persist(
+    (set) => ({
+      mode: 'gentle' as AIMode,
       sliders: { ...DEFAULT_SLIDERS },
       explanations: true,
       hideToxicReplies: true,
+      setMode: (mode) => set({ mode }),
+      setSlider: (key, value) =>
+        set((s) => ({
+          sliders: { ...s.sliders, [key]: Math.round(value) },
+        })),
+      setExplanations: (explanations) => set({ explanations }),
+      setHideToxicReplies: (hideToxicReplies) => set({ hideToxicReplies }),
+      resetPersonalization: () =>
+        set({
+          mode: 'gentle',
+          sliders: { ...DEFAULT_SLIDERS },
+          explanations: true,
+          hideToxicReplies: true,
+        }),
     }),
-}));
+    {
+      name: 'cxcix-ai-moderator',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({
+        mode: s.mode,
+        sliders: s.sliders,
+        explanations: s.explanations,
+        hideToxicReplies: s.hideToxicReplies,
+      }),
+    },
+  ),
+);

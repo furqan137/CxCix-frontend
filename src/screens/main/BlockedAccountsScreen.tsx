@@ -1,12 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Images } from '../../constants/images';
 import type { MainStackParamList } from '../../navigation/types';
+import { getApiMessage } from '../../api/auth';
+import { apiListBlockedUsers, apiSetBlockedUser, type PublicUser } from '../../api/users';
+import { useAuthStore } from '../../store/useAuthStore';
+import { formatAtUsername, formatUserDisplayName } from '../../utils/userDisplay';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'BlockedAccounts'>;
 
@@ -14,26 +19,64 @@ const PAGE = '#F5F7F9';
 
 type Blocked = { id: string; name: string; handle: string; avatar: any };
 
+function toRow(u: PublicUser): Blocked {
+  return {
+    id: u._id,
+    name: formatUserDisplayName({
+      fullName: u.fullName,
+      displayName: u.displayName,
+      username: u.username,
+    }),
+    handle: formatAtUsername(u.username),
+    avatar: u.avatarUrl?.trim() ? { uri: u.avatarUrl.trim() } : Images.avatarSplit,
+  };
+}
+
 export default function BlockedAccountsScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState<Blocked | null>(null);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const [rows, setRows] = useState<Blocked[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const blocked = useMemo<Blocked[]>(
-    () => [
-      { id: '1', name: 'Annette Black', handle: '@annette_black', avatar: Images.avatarSplit },
-      { id: '2', name: 'Esther Howard', handle: '@ether_howard', avatar: Images.avatarWade },
-      { id: '3', name: 'Leslie Alexander', handle: '@leslie_alex', avatar: Images.avatarSplit },
-    ],
-    [],
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const users = await apiListBlockedUsers();
+      setRows(users.map(toRow));
+    } catch (e) {
+      setRows([]);
+      Alert.alert('Blocked accounts', getApiMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
   );
 
-  const filtered = blocked.filter(
+  const filtered = rows.filter(
     (b) =>
       b.name.toLowerCase().includes(query.toLowerCase()) ||
       b.handle.toLowerCase().includes(query.toLowerCase()),
   );
 
-  const empty = filtered.length === 0;
+  const empty = !loading && filtered.length === 0;
+  const fullyEmpty = !loading && rows.length === 0;
+
+  const unblock = async (u: Blocked) => {
+    try {
+      await apiSetBlockedUser(u.id, false);
+      await refreshUser();
+      setRows((prev) => prev.filter((x) => x.id !== u.id));
+      setConfirm(null);
+    } catch (e) {
+      Alert.alert('Unblock', getApiMessage(e));
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: PAGE }} edges={['top']}>
@@ -62,7 +105,12 @@ export default function BlockedAccountsScreen({ navigation }: Props) {
           />
         </View>
 
-        {empty ? (
+        {loading ? (
+          <View className="items-center py-12">
+            <ActivityIndicator size="large" color="#6366F1" />
+            <Text className="mt-3 text-sm text-slate-500">Loading…</Text>
+          </View>
+        ) : fullyEmpty ? (
           <View className="mt-24 items-center px-8">
             <View className="h-20 w-20 items-center justify-center rounded-full bg-blue-50">
               <Ionicons name="ban-outline" size={30} color="#2563eb" />
@@ -71,6 +119,10 @@ export default function BlockedAccountsScreen({ navigation }: Props) {
             <Text className="mt-2 text-center text-sm leading-6 text-slate-500">
               Users you block will appear here for easy management and review.
             </Text>
+          </View>
+        ) : empty ? (
+          <View className="mt-8 items-center">
+            <Text className="text-sm text-slate-500">No matches for “{query.trim()}”</Text>
           </View>
         ) : (
           <View className="mt-4 gap-3">
@@ -104,7 +156,10 @@ export default function BlockedAccountsScreen({ navigation }: Props) {
         title={`Unblock ${confirm?.handle ?? '@annette'}?`}
         message="They will be able to:"
         primaryLabel="Unblock"
-        onPrimary={() => setConfirm(null)}
+        onPrimary={async () => {
+          if (!confirm) return;
+          await unblock(confirm);
+        }}
         icon={<Ionicons name="person-add-outline" size={22} color="#6366F1" />}
       >
         <View className="rounded-2xl bg-slate-50 p-4">

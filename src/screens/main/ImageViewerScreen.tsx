@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Pressable, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MEDIA_BY_ID } from '../../constants/mediaMap';
@@ -12,8 +12,12 @@ type Props = NativeStackScreenProps<MainStackParamList, 'ImageViewer'>;
  * Full-bleed media preview with close — Tap Post mock.
  */
 export default function ImageViewerScreen({ navigation, route }: Props) {
+  const { width, height } = useWindowDimensions();
+  const imageUri = route.params?.imageUri;
   const mediaId = route.params?.mediaId ?? 'dock';
-  const source = MEDIA_BY_ID[mediaId] ?? MEDIA_BY_ID.dock;
+  const source = imageUri
+    ? { uri: imageUri }
+    : MEDIA_BY_ID[mediaId] ?? MEDIA_BY_ID.dock;
 
   return (
     <View className="flex-1 bg-black">
@@ -30,8 +34,10 @@ export default function ImageViewerScreen({ navigation, route }: Props) {
       <View className="flex-1 items-center justify-center px-4">
         <Image
           source={source}
-          className="w-full overflow-hidden rounded-3xl"
-          style={{ maxHeight: '80%' }}
+          style={{
+            width: Math.max(0, width - 32),
+            height: Math.max(0, height - 120),
+          }}
           resizeMode="contain"
         />
       </View>

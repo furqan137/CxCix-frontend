@@ -20,19 +20,8 @@ interface BookmarksState {
   remove: (id: string) => void;
 }
 
-const seed: BookmarkItem[] = [
-  {
-    id: 'seed-serious-1',
-    mood: 'serious',
-    author: 'Elena Fisher',
-    handle: '@elenadesign',
-    timeLabel: '2h',
-    body: `Consistency isn't about intensity; it's about discipline. Turning vision into reality requires a steady hand and a clear mind. Onward.`,
-  },
-];
-
 export const useBookmarksStore = create<BookmarksState>((set) => ({
-  items: seed,
+  items: [],
   save: (item) =>
     set((s) => ({
       items: [

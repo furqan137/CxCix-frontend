@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
-  type ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,104 +15,213 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { apiListIncomingChatRequests } from '../../api/chatRequests';
+import { apiListConversations, type ApiConversation } from '../../api/conversations';
 import { Images } from '../../constants/images';
-import type { ChatAvatarKey, MainStackParamList } from '../../navigation/types';
+import type { MainStackParamList } from '../../navigation/types';
+import { apiSetPinnedChat } from '../../api/users';
+import { useAuthStore } from '../../store/useAuthStore';
+import {
+  buildChatId,
+  getMyChatParticipantId,
+  getPeerChatParticipantId,
+  listenChatMeta,
+  startPresence,
+  stopPresence,
+  subscribeInboxUnreadForChat,
+} from '../../services/chatService';
+import { formatAtUsername, formatUserDisplayName } from '../../utils/userDisplay';
 
 const PAGE = '#F9FAFB';
 const GRADIENT = ['#6C63FF', '#F5A623'] as const;
 
 type Row = {
   id: string;
+  /** RTDB / Mongo peer key used in buildChatId */
+  peerKey: string;
+  chatId: string;
+  sortTime: number;
+  firebaseUid?: string;
   name: string;
   handle: string;
   preview: string;
   time: string;
-  avatarKey: ChatAvatarKey;
+  avatarUrl?: string;
 };
 
-const PINNED: Row[] = [
-  {
-    id: 'p1',
-    name: 'Alex Johnson',
-    handle: '@alexjohnson',
-    preview: 'Hey, did you see the new design…',
-    time: '2m ago',
-    avatarKey: 'alex',
-  },
-  {
-    id: 'p2',
-    name: 'Sarah Miller',
-    handle: '@sarahmiller',
-    preview: 'Sounds good — I’ll send the file tonight.',
-    time: '1h ago',
-    avatarKey: 'sarah',
-  },
-];
+function participantId(p: { _id?: string; id?: string }) {
+  return String(p._id ?? p.id ?? '');
+}
 
-const RECENT: Row[] = [
-  {
-    id: 'r1',
-    name: 'Annette Black',
-    handle: '@annette_black',
-    preview: 'Can we sync on the chat thread tomorrow?',
-    time: 'yesterday',
-    avatarKey: 'annette',
-  },
-  {
-    id: 'r2',
-    name: 'Wade Warren',
-    handle: '@wade_warren',
-    preview: 'Uploaded the revised mockups ✓',
-    time: 'Feb 01',
-    avatarKey: 'wade',
-  },
-  {
-    id: 'r3',
-    name: 'Ralph Edwards',
-    handle: '@ralph_e',
-    preview: 'Thanks for the feedback!',
-    time: 'Jan 28',
-    avatarKey: 'ralph',
-  },
-  {
-    id: 'r4',
-    name: 'Eleanor Pena',
-    handle: '@eleanor_p',
-    preview: 'Let me know when you’re free to hop on a call.',
-    time: 'Jan 20',
-    avatarKey: 'eleanor',
-  },
-  {
-    id: 'r5',
-    name: 'Marvin McKinney',
-    handle: '@marvin_m',
-    preview: '👍',
-    time: 'Jan 12',
-    avatarKey: 'marvin',
-  },
-];
+function conversationToRow(
+  conv: ApiConversation,
+  myId: string,
+  selfChatId: string,
+): Row | null {
+  const other = conv.participants.find((p) => participantId(p) !== String(myId));
+  if (!other) return null;
+  const oid = participantId(other);
+  if (!oid) return null;
+  const peerKey = getPeerChatParticipantId(other) || other.firebaseUid?.trim() || oid;
+  const last = conv.lastMessageAt
+    ? new Date(conv.lastMessageAt)
+    : conv.updatedAt
+      ? new Date(conv.updatedAt)
+      : new Date();
+  const sortTime = conv.lastMessageAt
+    ? new Date(conv.lastMessageAt).getTime()
+    : conv.updatedAt
+      ? new Date(conv.updatedAt).getTime()
+      : 0;
+  const chatId = buildChatId(selfChatId, peerKey);
+  return {
+    id: oid,
+    peerKey,
+    chatId,
+    sortTime,
+    firebaseUid: other.firebaseUid,
+    name: formatUserDisplayName({
+      fullName: other.fullName,
+      displayName: other.displayName,
+      username: other.username,
+    }),
+    handle: formatAtUsername(other.username),
+    preview: conv.lastMessageText?.trim() ? conv.lastMessageText : 'Tap to open chat',
+    time: formatRelativeTime(last),
+    avatarUrl: other.avatarUrl?.trim() || undefined,
+  };
+}
 
-const AVATAR_MAP: Record<ChatAvatarKey, ImageSourcePropType> = {
-  annette: Images.mutedAccountAvatar.one,
-  alex: Images.messages.listRow1,
-  sarah: Images.messages.listRow2,
-  wade: Images.avatarWade,
-  ralph: Images.messages.listRow3,
-  eleanor: Images.messages.listRow4,
-  marvin: Images.messages.listRow5,
-};
+function sortRowsByPinnedAndRecency(rows: Row[], pinned: string[] | undefined) {
+  const order = [...(pinned || [])].map(String);
+  const rank = (chatId: string) => {
+    const i = order.indexOf(chatId);
+    if (i === -1) return 1_000_000;
+    return i;
+  };
+  return [...rows].sort((a, b) => {
+    const r = rank(a.chatId) - rank(b.chatId);
+    if (r !== 0) return r;
+    return b.sortTime - a.sortTime;
+  });
+}
 
-function peerAvatar(key: ChatAvatarKey) {
-  return AVATAR_MAP[key];
+function formatRelativeTime(d: Date): string {
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (sec < 45) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /**
- * Messages inbox — PINNED / RECENT, search, Requests pill, FAB → ChatThread.
+ * Messages inbox — conversations from API; Firestore previews; requests → ChatRequests.
  */
 export default function MessagingScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const currentUserId = useAuthStore((s) => s.user?._id ?? '');
+  const me = useAuthStore((s) => s.user);
+  /** Must match `getMyChatParticipantId` in `ChatThreadScreen` (Auth uid → API firebase → Mongo). */
+  const selfChatId = getMyChatParticipantId(me) || '';
+  const pinnedList = (me?.pinnedChatIds || []) as string[];
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const [threads, setThreads] = useState<Row[]>([]);
+  const [requestCount, setRequestCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [metaByPeer, setMetaByPeer] = useState<Record<string, { preview: string; time: string }>>(
+    {},
+  );
+  const [unreadByChat, setUnreadByChat] = useState<Record<string, 0 | 1>>({});
+  const setUser = useAuthStore((s) => s.setUser);
+
+  const loadInbox = useCallback(async () => {
+    if (!isLoggedIn || !currentUserId || !selfChatId) {
+      setThreads([]);
+      setRequestCount(0);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [convs, reqs] = await Promise.all([
+        apiListConversations(),
+        apiListIncomingChatRequests(),
+      ]);
+      const rows = convs
+        .map((c) => conversationToRow(c, currentUserId, selfChatId))
+        .filter((r): r is Row => r != null);
+      setThreads(rows);
+      setRequestCount(reqs.length);
+    } catch {
+      setThreads([]);
+      setRequestCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUserId, isLoggedIn, selfChatId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadInbox();
+    }, [loadInbox]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!selfChatId) {
+        return () => {};
+      }
+      startPresence(selfChatId);
+      return () => {
+        stopPresence();
+      };
+    }, [selfChatId]),
+  );
+
+  useEffect(() => {
+    if (!selfChatId || threads.length === 0) return;
+    const unsubs = threads
+      .map((row) => {
+        const chatId = row.chatId;
+        return listenChatMeta(chatId, (meta) => {
+          setMetaByPeer((prev) => {
+            if (!meta) {
+              const next = { ...prev };
+              delete next[row.id];
+              return next;
+            }
+            return {
+              ...prev,
+              [row.id]: {
+                preview: meta.lastMessageText?.trim() ? meta.lastMessageText : row.preview,
+                time: meta.lastMessageAt ? formatRelativeTime(meta.lastMessageAt) : row.time,
+              },
+            };
+          });
+        });
+      })
+      .filter(Boolean) as Array<() => void>;
+    return () => unsubs.forEach((u) => u());
+  }, [selfChatId, threads]);
+
+  useEffect(() => {
+    if (!selfChatId || threads.length === 0) return;
+    const unsubs = threads.map((row) =>
+      subscribeInboxUnreadForChat(selfChatId, row.chatId, (n) => {
+        setUnreadByChat((prev) => {
+          if (prev[row.chatId] === n) return prev;
+          return { ...prev, [row.chatId]: n };
+        });
+      }),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [selfChatId, threads]);
 
   const stackNav = useCallback(() => {
     return navigation.getParent() as
@@ -122,11 +232,41 @@ export default function MessagingScreen() {
   const openThread = (row: Row) => {
     stackNav()?.navigate('ChatThread', {
       peerId: row.id,
+      peerFirebaseUid: row.firebaseUid,
       name: row.name,
       handle: row.handle,
-      avatarKey: row.avatarKey,
+      avatarUrl: row.avatarUrl,
     });
   };
+
+  const onLongPressRow = useCallback(
+    (row: Row) => {
+      const isPinned = pinnedList.includes(row.chatId);
+      Alert.alert(
+        isPinned ? 'Unpin chat' : 'Pin chat',
+        isPinned
+          ? 'Remove this chat from the pinned section.'
+          : 'Keep this chat at the top of your list.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: isPinned ? 'Unpin' : 'Pin',
+            onPress: () => {
+              void (async () => {
+                try {
+                  const u = await apiSetPinnedChat(row.chatId, !isPinned);
+                  setUser(u);
+                } catch {
+                  Alert.alert('Could not update', 'Try again later.');
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [pinnedList, setUser],
+  );
 
   const filterRows = useCallback(
     (rows: Row[]) =>
@@ -139,8 +279,23 @@ export default function MessagingScreen() {
     [query],
   );
 
-  const pinned = useMemo(() => filterRows(PINNED), [filterRows]);
-  const recent = useMemo(() => filterRows(RECENT), [filterRows]);
+  const sortedThreads = useMemo(
+    () => sortRowsByPinnedAndRecency(threads, me?.pinnedChatIds),
+    [threads, me?.pinnedChatIds],
+  );
+
+  const visible = useMemo(() => filterRows(sortedThreads), [filterRows, sortedThreads]);
+
+  const { pinnedRows, recentRows } = useMemo(() => {
+    const pset = new Set(pinnedList);
+    const pinned: Row[] = [];
+    const recent: Row[] = [];
+    for (const r of visible) {
+      if (pset.has(r.chatId)) pinned.push(r);
+      else recent.push(r);
+    }
+    return { pinnedRows: pinned, recentRows: recent };
+  }, [visible, pinnedList]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -158,9 +313,16 @@ export default function MessagingScreen() {
           )}
         </Pressable>
         <Text style={styles.headerTitle}>Messages</Text>
-        <Pressable style={styles.requestsPill}>
-          <Text style={styles.requestsText}>Requests (3)</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable
+            style={styles.requestsPill}
+            onPress={() => stackNav()?.navigate('ChatRequests')}
+          >
+            <Text style={styles.requestsText}>
+              Requests{requestCount > 0 ? ` (${requestCount})` : ''}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -179,29 +341,68 @@ export default function MessagingScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {pinned.length > 0 ? (
-          <>
-            <View style={styles.sectionHead}>
-              <Ionicons name="pin" size={14} color="#64748b" />
-              <Text style={styles.sectionLabel}> PINNED</Text>
-            </View>
-            {pinned.map((row) => (
-              <MessageRow key={row.id} row={row} onPress={() => openThread(row)} />
-            ))}
-          </>
-        ) : null}
-
-        {recent.length > 0 ? (
-          <>
-            <View style={[styles.sectionHead, { marginTop: pinned.length ? 20 : 8 }]}>
-              <Text style={styles.sectionLabel}>RECENT</Text>
-            </View>
-            {recent.map((row) => (
-              <MessageRow key={row.id} row={row} onPress={() => openThread(row)} />
-            ))}
-          </>
-        ) : (
+        {!isLoggedIn ? (
+          <Text style={styles.emptySearch}>Sign in to see your conversations.</Text>
+        ) : loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#6366F1" />
+          </View>
+        ) : threads.length === 0 ? (
+          <Text style={styles.emptySearch}>
+            No chats yet. Search people and send a message request to start.
+          </Text>
+        ) : visible.length === 0 ? (
           <Text style={styles.emptySearch}>No conversations match your search.</Text>
+        ) : (
+          <>
+            {pinnedRows.length > 0 ? (
+              <>
+                <View style={styles.sectionHead}>
+                  <Ionicons
+                    name="pin"
+                    size={16}
+                    color="#2563eb"
+                    style={styles.sectionPinIcon}
+                  />
+                  <Text style={[styles.sectionLabel, styles.sectionLabelPinned]}>
+                    PINNED
+                  </Text>
+                </View>
+                {pinnedRows.map((row) => (
+                  <MessageRow
+                    key={row.chatId}
+                    row={row}
+                    pinned
+                    previewOverride={metaByPeer[row.id]?.preview}
+                    timeOverride={metaByPeer[row.id]?.time}
+                    unread={unreadByChat[row.chatId] === 1}
+                    onPress={() => openThread(row)}
+                    onLongPress={() => onLongPressRow(row)}
+                  />
+                ))}
+              </>
+            ) : null}
+            {recentRows.length > 0 ? (
+              <>
+                <View style={styles.sectionHead}>
+                  <Text style={styles.sectionLabel}>
+                    {pinnedRows.length > 0 ? 'RECENT' : 'CHATS'}
+                  </Text>
+                </View>
+                {recentRows.map((row) => (
+                  <MessageRow
+                    key={row.chatId}
+                    row={row}
+                    previewOverride={metaByPeer[row.id]?.preview}
+                    timeOverride={metaByPeer[row.id]?.time}
+                    unread={unreadByChat[row.chatId] === 1}
+                    onPress={() => openThread(row)}
+                    onLongPress={() => onLongPressRow(row)}
+                  />
+                ))}
+              </>
+            ) : null}
+          </>
         )}
       </ScrollView>
 
@@ -210,14 +411,7 @@ export default function MessagingScreen() {
           styles.fab,
           { bottom: Math.max(insets.bottom, 12) + 72 },
         ]}
-        onPress={() =>
-          stackNav()?.navigate('ChatThread', {
-            peerId: 'annette',
-            name: 'Annette Black',
-            handle: '@annette_black',
-            avatarKey: 'annette',
-          })
-        }
+        onPress={() => stackNav()?.navigate('Search', { initialTab: 'People' })}
         accessibilityLabel="New message"
       >
         <LinearGradient
@@ -233,19 +427,72 @@ export default function MessagingScreen() {
   );
 }
 
-function MessageRow({ row, onPress }: { row: Row; onPress: () => void }) {
+function MessageRow({
+  row,
+  onPress,
+  onLongPress,
+  previewOverride,
+  timeOverride,
+  unread,
+  pinned,
+}: {
+  row: Row;
+  onPress: () => void;
+  onLongPress?: () => void;
+  previewOverride?: string;
+  timeOverride?: string;
+  unread?: boolean;
+  /** Show pin when this thread is in the pinned list */
+  pinned?: boolean;
+}) {
+  const src =
+    row.avatarUrl && row.avatarUrl.length > 0
+      ? { uri: row.avatarUrl }
+      : Images.avatarSplit;
+
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <Image source={peerAvatar(row.avatarKey)} style={styles.avatar} resizeMode="cover" />
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={380}
+      style={styles.card}
+    >
+      <View style={styles.avatarWrap}>
+        <Image source={src} style={styles.avatar} resizeMode="cover" />
+        {unread ? <View style={styles.unreadDot} /> : null}
+      </View>
       <View style={styles.cardMid}>
-        <Text style={styles.name} numberOfLines={1}>
-          {row.name}
-        </Text>
-        <Text style={styles.preview} numberOfLines={1}>
-          {row.preview}
+        <View style={styles.nameRow}>
+          <Text
+            style={[styles.name, unread && styles.nameUnread]}
+            numberOfLines={1}
+          >
+            {row.name}
+          </Text>
+          {pinned ? (
+            <Ionicons
+              name="pin"
+              size={15}
+              color="#2563eb"
+              style={styles.rowPinIcon}
+            />
+          ) : null}
+        </View>
+        <Text
+          style={[styles.preview, unread && styles.previewUnread]}
+          numberOfLines={1}
+        >
+          {previewOverride ?? row.preview}
         </Text>
       </View>
-      <Text style={styles.time}>{row.time}</Text>
+      <View style={styles.timeCol}>
+        <Text style={styles.time}>{timeOverride ?? row.time}</Text>
+        {unread ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>1</Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -320,17 +567,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 120,
   },
+  loadingWrap: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
     marginTop: 4,
   },
+  sectionPinIcon: {
+    marginRight: 6,
+  },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.8,
     color: '#475569',
+  },
+  sectionLabelPinned: {
+    color: '#0f172a',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    gap: 6,
+  },
+  rowPinIcon: {
+    flexShrink: 0,
   },
   card: {
     flexDirection: 'row',
@@ -362,26 +628,68 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   name: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: '#0f172a',
+    minWidth: 0,
   },
   preview: {
     marginTop: 3,
     fontSize: 13,
     color: '#64748b',
   },
-  time: {
+  timeCol: {
     marginLeft: 8,
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  time: {
     fontSize: 11,
     color: '#94a3b8',
     fontWeight: '500',
+  },
+  nameUnread: {
+    fontWeight: '800',
+  },
+  previewUnread: {
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  unreadDot: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2563eb',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   emptySearch: {
     marginTop: 32,
     textAlign: 'center',
     color: '#64748b',
     fontSize: 15,
+    paddingHorizontal: 12,
   },
   fab: {
     position: 'absolute',

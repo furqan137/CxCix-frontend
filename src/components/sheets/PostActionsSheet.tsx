@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
@@ -14,44 +15,70 @@ import { BottomSheetModal } from '../ui/BottomSheetModal';
 
 const CANCEL_GRADIENT = ['#5B7FFF', '#8B5CF6', '#DDB363'] as const;
 
-const ICON_BG = '#EEF2FF';
-const ICON_COLOR = '#3B82F6';
-
-const DANGER_BG = '#FDECEC';
-const DANGER_COLOR = '#EF4444';
-
 const TEXT_MAIN = '#0F172A';
-const TEXT_SECONDARY = '#475569';
 
 /* ================= ROW ================= */
 
-function Row({ icon, label, danger, onPress }: any) {
+function Row({
+  icon,
+  label,
+  danger,
+  onPress,
+  loading,
+  disabled,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  danger?: boolean;
+  onPress?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
+  const dim = disabled || loading;
   return (
-    <Pressable onPress={onPress} style={styles.row}>
-      
-      {/* ICON */}
-      <View style={[
-        styles.iconBox,
-        danger && { backgroundColor: '#FDECEC' }
-      ]}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color={danger ? '#EF4444' : '#3B82F6'}
-        />
+    <Pressable
+      onPress={onPress}
+      disabled={dim || !onPress}
+      style={[styles.row, dim && { opacity: 0.5 }]}
+    >
+      <View style={[styles.iconBox, danger && { backgroundColor: '#FDECEC' }]}>
+        {loading ? (
+          <ActivityIndicator size="small" color={danger ? '#EF4444' : '#3B82F6'} />
+        ) : (
+          <Ionicons
+            name={icon}
+            size={20}
+            color={danger ? '#EF4444' : '#3B82F6'}
+          />
+        )}
       </View>
-
-      {/* TEXT */}
-      <Text style={[
-        styles.label,
-        danger && { color: '#EF4444' }
-      ]}>
-        {label}
-      </Text>
-
+      <Text style={[styles.label, danger && { color: '#EF4444' }]}>{label}</Text>
     </Pressable>
   );
 }
+
+export type PostActionsSheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  variant: 'own' | 'other';
+  postId: string;
+  postHandle?: string;
+  /** Own post — from API `pinnedToProfile` */
+  isPinned?: boolean;
+  pinBusy?: boolean;
+  onReport?: () => void;
+  onDelete?: () => void;
+  onPinToggle?: () => void;
+  onViewInsights?: () => void;
+  onEdit?: () => void;
+  onShare?: () => void;
+  onCopyLink?: () => void;
+  /** Other’s post — server-backed hide from Home / Explore / Search. */
+  onHidePost?: () => void;
+  onMuteUser?: () => void;
+  onBlockUser?: () => void;
+  hideBusy?: boolean;
+};
 
 /* ================= MAIN ================= */
 
@@ -59,13 +86,23 @@ export function PostActionsSheet({
   visible,
   onClose,
   variant,
+  postId,
   postHandle = '@username',
+  isPinned = false,
+  pinBusy = false,
   onReport,
   onDelete,
-}: any) {
-  const target = postHandle.startsWith('@')
-    ? postHandle
-    : `@${postHandle}`;
+  onPinToggle,
+  onViewInsights,
+  onEdit,
+  onShare,
+  onCopyLink,
+  onHidePost,
+  onMuteUser,
+  onBlockUser,
+  hideBusy = false,
+}: PostActionsSheetProps) {
+  const target = postHandle.startsWith('@') ? postHandle : `@${postHandle}`;
 
   return (
     <BottomSheetModal
@@ -76,41 +113,45 @@ export function PostActionsSheet({
       handleWidth={42}
       handleHeight={5}
     >
-      <View style={styles.container}>
-
-        {/* CONTENT */}
+      <View style={styles.container} accessibilityLabel={`Post actions ${postId}`}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-
-          <Text style={styles.title}>Post Action</Text>
+          <Text style={styles.title}>Post Actions</Text>
 
           {variant === 'own' ? (
             <>
               <View style={styles.group}>
-                <Row icon="pin-outline" label="Pin to profile" />
-                <Row icon="bar-chart-outline" label="View post insights" />
-                <Row icon="create-outline" label="Edit post" />
-                <Row icon="share-social-outline" label="Share" />
-                <Row icon="link-outline" label="Copy link" />
+                <Row
+                  icon={isPinned ? 'pin' : 'pin-outline'}
+                  label={isPinned ? 'Unpin from profile' : 'Pin to profile'}
+                  onPress={onPinToggle}
+                  loading={pinBusy}
+                  disabled={pinBusy}
+                />
+                <Row icon="bar-chart-outline" label="View post insights" onPress={onViewInsights} />
+                <Row icon="create-outline" label="Edit post" onPress={onEdit} />
+                <Row icon="share-social-outline" label="Share" onPress={onShare} />
+                <Row icon="link-outline" label="Copy link" onPress={onCopyLink} />
               </View>
 
               <View style={styles.divider} />
 
-              <Row
-                icon="trash-outline"
-                label="Delete post"
-                danger
-                onPress={onDelete}
-              />
+              <Row icon="trash-outline" label="Delete post" danger onPress={onDelete} />
             </>
           ) : (
             <>
               <View style={styles.group}>
-                <Row icon="share-social-outline" label="Share" />
-                <Row icon="link-outline" label="Copy link" />
-                <Row icon="eye-off-outline" label="Don’t want to see this post" />
+                <Row icon="share-social-outline" label="Share" onPress={onShare} />
+                <Row icon="link-outline" label="Copy link" onPress={onCopyLink} />
+                <Row
+                  icon="eye-off-outline"
+                  label="Don’t want to see this post"
+                  onPress={onHidePost}
+                  loading={hideBusy}
+                  disabled={hideBusy}
+                />
               </View>
 
               <View style={styles.divider} />
@@ -118,9 +159,19 @@ export function PostActionsSheet({
               <Text style={styles.section}>Conversation Controls</Text>
 
               <View style={styles.groupSmall}>
-                <Row icon="eye-off-outline" label="Hide this post" />
-                <Row icon="notifications-off-outline" label={`Mute ${target}`} />
-                <Row icon="ban-outline" label={`Block ${target}`} />
+                <Row
+                  icon="eye-off-outline"
+                  label="Hide this post"
+                  onPress={onHidePost}
+                  loading={hideBusy}
+                  disabled={hideBusy}
+                />
+                <Row
+                  icon="notifications-off-outline"
+                  label={`Mute ${target}`}
+                  onPress={onMuteUser}
+                />
+                <Row icon="ban-outline" label={`Block ${target}`} onPress={onBlockUser} />
               </View>
 
               <View style={styles.divider} />
@@ -128,19 +179,12 @@ export function PostActionsSheet({
               <Text style={styles.section}>Safety</Text>
 
               <View style={styles.groupSmall}>
-                <Row
-                  icon="warning-outline"
-                  label="Report..."
-                  danger
-                  onPress={onReport}
-                />
+                <Row icon="warning-outline" label="Report..." danger onPress={onReport} />
               </View>
             </>
           )}
-
         </ScrollView>
 
-        {/* 🔥 ALWAYS SHOW CANCEL (FIXED) */}
         <View style={styles.footer}>
           <Pressable onPress={onClose} style={styles.cancelWrap}>
             <LinearGradient
@@ -153,7 +197,6 @@ export function PostActionsSheet({
             </LinearGradient>
           </Pressable>
         </View>
-
       </View>
     </BottomSheetModal>
   );
@@ -164,8 +207,8 @@ export function PostActionsSheet({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    height: '100%',        // ✅ IMPORTANT
-    justifyContent: 'space-between', // ✅ pushes footer down
+    height: '100%',
+    justifyContent: 'space-between',
   },
 
   scrollContent: {
@@ -196,11 +239,11 @@ const styles = StyleSheet.create({
   },
 
   row: {
-    flexDirection: 'row',        // ✅ MUST
-    alignItems: 'center',        // ✅ vertical center
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
   },
-  
+
   iconBox: {
     width: 44,
     height: 44,
@@ -209,18 +252,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   label: {
     marginLeft: 14,
     fontSize: 16,
     color: '#334155',
     fontWeight: '500',
-    textAlignVertical: 'center', // ✅ FIX alignment
-  },
-
-  dangerText: {
-    color: DANGER_COLOR,
-    fontWeight: '600',
+    textAlignVertical: 'center',
+    flex: 1,
   },
 
   divider: {

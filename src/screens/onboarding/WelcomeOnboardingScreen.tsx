@@ -115,7 +115,7 @@ export default function WelcomeOnboardingScreen({ navigation }: Props) {
           <FadeStagger delayMs={300} variant="rise">
             <GradientButton
               variant="welcome"
-              onPress={() => navigation.navigate('AIModeratorIntro')}
+              onPress={() => navigation.navigate('Login')}
             >
               Get Started
             </GradientButton>

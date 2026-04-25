@@ -9,7 +9,9 @@ type Props = {
   title: string;
   message?: string;
   primaryLabel: string;
-  onPrimary: () => void;
+  onPrimary: () => void | Promise<void>;
+  /** Disable primary action (e.g. while a request is in flight). */
+  primaryDisabled?: boolean;
   icon?: React.ReactNode;
   /** Optional content area (e.g. “They will be able to…”) */
   children?: React.ReactNode;
@@ -25,6 +27,7 @@ export function ConfirmDialog({
   message,
   primaryLabel,
   onPrimary,
+  primaryDisabled,
   icon,
   children,
 }: Props) {
@@ -53,7 +56,12 @@ export function ConfirmDialog({
 
           {children ? <View className="mt-4">{children}</View> : null}
 
-          <Pressable onPress={onPrimary} className="mt-5 overflow-hidden rounded-full">
+          <Pressable
+            onPress={() => void onPrimary()}
+            disabled={primaryDisabled}
+            className="mt-5 overflow-hidden rounded-full"
+            style={{ opacity: primaryDisabled ? 0.55 : 1 }}
+          >
             <LinearGradient
               colors={[...BRAND_GRADIENT]}
               start={{ x: 0, y: 0.5 }}

@@ -12,23 +12,22 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { BRAND } from '../constants/brand';
 import type { RootStackParamList } from '../navigation/types';
+import { useAuthStore } from '../store/useAuthStore';
 
-const SPLASH_MS = 3000;
+const SPLASH_MS = 2200;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 export default function SplashScreen({ navigation }: Props) {
-  /* ================= ANIMATION ================= */
-
   const scale = useRef(new Animated.Value(0.8)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const hydrate = useAuthStore((s) => s.hydrate);
 
   useLayoutEffect(() => {
-    ExpoSplashScreen.hideAsync();
+    void ExpoSplashScreen.hideAsync();
   }, []);
 
   useEffect(() => {
-    // animation
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
@@ -43,13 +42,29 @@ export default function SplashScreen({ navigation }: Props) {
       }),
     ]).start();
 
-    // navigation
-    const t = setTimeout(() => {
-      navigation.replace('WelcomeOnboarding');
-    }, SPLASH_MS);
-
-    return () => clearTimeout(t);
-  }, []);
+    let cancelled = false;
+    const run = async () => {
+      await Promise.all([
+        new Promise<void>((r) => setTimeout(r, SPLASH_MS)),
+        hydrate(),
+      ]);
+      if (cancelled) return;
+      const { isLoggedIn, user } = useAuthStore.getState();
+      if (!isLoggedIn) {
+        navigation.replace('WelcomeOnboarding');
+        return;
+      }
+      if (user?.needsProfile) {
+        navigation.replace('SignupStepName');
+        return;
+      }
+      navigation.replace('Main');
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrate, navigation, opacity, scale]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -70,9 +85,8 @@ export default function SplashScreen({ navigation }: Props) {
             transform: [{ scale }],
           }}
         >
-          {/* LOGO (FROM ICONS FOLDER) */}
           <Image
-            source={require('../../assets/icons/logo.png')} // ✅ YOUR ICON PATH
+            source={require('../../assets/icons/logo.png')}
             resizeMode="contain"
             style={{
               width: 220,
@@ -82,8 +96,6 @@ export default function SplashScreen({ navigation }: Props) {
             }}
           />
 
-
-          {/* SUBTITLE */}
           <Text
             style={{
               fontSize: 18,
@@ -95,7 +107,6 @@ export default function SplashScreen({ navigation }: Props) {
             Surf Your Mood
           </Text>
 
-          {/* TAGLINE */}
           <Text
             style={{
               fontSize: 14,

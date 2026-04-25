@@ -15,7 +15,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AIModeratorIntro'>;
 /**
  * “Your personal AI Moderator” — animated brain + gears, train / skip.
  */
-export default function AIModeratorIntroScreen({ navigation }: Props) {
+export default function AIModeratorIntroScreen({ navigation, route }: Props) {
+  const signupFlow = route.params?.signupFlow === true;
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
       <StatusBar style="dark" />
@@ -50,14 +51,21 @@ export default function AIModeratorIntroScreen({ navigation }: Props) {
 
         <View className="pb-2">
           <FadeStagger delayMs={280} variant="rise">
-            <GradientButton variant="welcome" onPress={() => navigation.navigate('AIModerator')}>
+            <GradientButton
+              variant="welcome"
+              onPress={() => navigation.navigate('AIModerator', { signupFlow })}
+            >
               Train Your AI
             </GradientButton>
           </FadeStagger>
           <FadeStagger delayMs={340} variant="fade">
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.replace('Login')}
+              onPress={() =>
+                signupFlow
+                  ? navigation.replace('AccountCreated')
+                  : navigation.replace('Login')
+              }
               className="items-center py-4"
             >
               <Text className="text-base font-semibold" style={{ color: BRAND.subtitle }}>

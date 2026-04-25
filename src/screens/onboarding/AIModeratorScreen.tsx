@@ -18,6 +18,8 @@ import { BRAND, BRAND_GRADIENT } from '../../constants/brand';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { type AIMode, SLIDER_KEYS, useAIModeratorStore } from '../../store/useAIModeratorStore';
 import type { RootStackParamList } from '../../navigation/types';
+import { apiSaveAiPreferences } from '../../api/users';
+import { getApiMessage } from '../../api/auth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIModerator'>;
 
@@ -34,7 +36,8 @@ function formatLabel(key: string) {
 /**
  * Full AI moderator tuning — sliders, mode, toggles, reset (design match).
  */
-export default function AIModeratorScreen({ navigation }: Props) {
+export default function AIModeratorScreen({ navigation, route }: Props) {
+  const signupFlow = route.params?.signupFlow === true;
   const insets = useSafeAreaInsets();
   const mode = useAIModeratorStore((s) => s.mode);
   const setMode = useAIModeratorStore((s) => s.setMode);
@@ -202,7 +205,28 @@ export default function AIModeratorScreen({ navigation }: Props) {
         className="absolute bottom-0 left-0 right-0 border-t border-slate-200/80 bg-white px-4 pt-3"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        <GradientButton onPress={() => navigation.replace('Login')}>Finish AI Setup</GradientButton>
+        <GradientButton
+          onPress={() =>
+            void (async () => {
+              try {
+                await apiSaveAiPreferences({
+                  mode,
+                  toxicity: (sliders.toxicity ?? 25) / 100,
+                  humor: (sliders.humor ?? 40) / 100,
+                  intensity: (sliders.intensity ?? 50) / 100,
+                  depth: (sliders.depth ?? 65) / 100,
+                  repetition: (sliders.repetition ?? 30) / 100,
+                });
+              } catch (e) {
+                Alert.alert('Could not save', getApiMessage(e));
+                return;
+              }
+              signupFlow ? navigation.replace('AccountCreated') : navigation.replace('Login');
+            })()
+          }
+        >
+          Finish AI Setup
+        </GradientButton>
       </View>
     </SafeAreaView>
   );

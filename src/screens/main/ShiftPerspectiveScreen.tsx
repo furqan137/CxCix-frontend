@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -30,6 +31,14 @@ export default function ShiftPerspectiveScreen({ navigation }: Props) {
   const route = useRoute<Props['route']>();
   const postId = route.params?.postId;
   const [selected, setSelected] = useState<ShiftPerspectiveId | null>(null);
+
+  useEffect(() => {
+    if (!postId) {
+      Alert.alert('Shift', 'Open Shift from a post on the feed.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    }
+  }, [postId, navigation]);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
@@ -78,20 +87,17 @@ export default function ShiftPerspectiveScreen({ navigation }: Props) {
       <View className="border-t border-slate-100 bg-white px-4 pb-2 pt-3">
         <GradientButton
           onPress={() => {
-            if (!selected) return;
+            if (!selected || !postId) return;
             const label = SHIFT_PERSPECTIVES.find((x) => x.id === selected)?.label ?? 'Perspective';
             navigation.navigate('AddCommentary', {
               postId,
               perspectiveLabel: label,
             });
           }}
-          disabled={!selected}
+          disabled={!selected || !postId}
         >
           Continue
         </GradientButton>
-        {postId ? (
-          <Text className="mt-2 text-center text-xs text-slate-400">Post {postId}</Text>
-        ) : null}
       </View>
     </SafeAreaView>
   );

@@ -21,6 +21,8 @@ import {
   SLIDER_KEYS,
   useAIModeratorStore,
 } from '../../store/useAIModeratorStore';
+import { apiSaveAiPreferences } from '../../api/users';
+import { getApiMessage } from '../../api/auth';
 
 const PAGE_BG = '#F9FAFB';
 const H_PAD = 20;
@@ -76,6 +78,24 @@ export default function MoodReportInsightsScreen({ navigation }: Props) {
     );
   }, []);
 
+  const onSave = useCallback(() => {
+    void (async () => {
+      try {
+        await apiSaveAiPreferences({
+          mode,
+          toxicity: (sliders.toxicity ?? 25) / 100,
+          humor: (sliders.humor ?? 40) / 100,
+          intensity: (sliders.intensity ?? 50) / 100,
+          depth: (sliders.depth ?? 65) / 100,
+          repetition: (sliders.repetition ?? 30) / 100,
+        });
+        Alert.alert('Saved', 'AI Moderator preferences updated.');
+      } catch (e) {
+        Alert.alert('Could not save', getApiMessage(e));
+      }
+    })();
+  }, [mode, sliders]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar style="dark" />
@@ -91,14 +111,24 @@ export default function MoodReportInsightsScreen({ navigation }: Props) {
         <Text style={styles.headerTitle} numberOfLines={1}>
           Mood Report insights
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="About mood report"
-          onPress={onInfo}
-          style={styles.headerIconBtn}
-        >
-          <Ionicons name="information-circle-outline" size={22} color="#334155" />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save AI settings"
+            onPress={onSave}
+            style={styles.headerIconBtn}
+          >
+            <Ionicons name="save-outline" size={22} color="#334155" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="About mood report"
+            onPress={onInfo}
+            style={styles.headerIconBtn}
+          >
+            <Ionicons name="information-circle-outline" size={22} color="#334155" />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView

@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   type ImageSourcePropType,
   Pressable,
@@ -17,6 +20,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Images } from '../../constants/images';
 import type { MainStackParamList } from '../../navigation/types';
+import { getApiMessage } from '../../api/auth';
+import { apiListMutedUsers, apiSetMutedUser, type PublicUser } from '../../api/users';
+import { useAuthStore } from '../../store/useAuthStore';
+import { formatAtUsername, formatUserDisplayName } from '../../utils/userDisplay';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'MutedAccounts'>;
 
@@ -30,34 +37,47 @@ type MutedUser = {
   avatar: ImageSourcePropType;
 };
 
-const INITIAL_MUTED: MutedUser[] = [
-  {
-    id: '1',
-    name: 'Annette Black',
-    handle: '@annette_black',
-    avatar: Images.mutedAccountAvatar.one,
-  },
-  {
-    id: '2',
-    name: 'Cameron Williamson',
-    handle: '@cameron_w',
-    avatar: Images.mutedAccountAvatar.two,
-  },
-  {
-    id: '3',
-    name: 'Jacob Jones',
-    handle: '@jacob_jones',
-    avatar: Images.mutedAccountAvatar.three,
-  },
-];
+function toRow(u: PublicUser): MutedUser {
+  const name = formatUserDisplayName({
+    fullName: u.fullName,
+    displayName: u.displayName,
+    username: u.username,
+  });
+  const handle = formatAtUsername(u.username);
+  const avatar: ImageSourcePropType = u.avatarUrl?.trim()
+    ? { uri: u.avatarUrl.trim() }
+    : Images.avatarSplit;
+  return { id: u._id, name, handle, avatar };
+}
 
 /**
  * Muted Accounts — search, list with circular avatars + gradient-border Unmute, empty state, confirm dialog.
  */
 export default function MutedAccountsScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
-  const [rows, setRows] = useState<MutedUser[]>(INITIAL_MUTED);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const [rows, setRows] = useState<MutedUser[]>([]);
   const [confirm, setConfirm] = useState<MutedUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const users = await apiListMutedUsers();
+      setRows(users.map(toRow));
+    } catch (e) {
+      setRows([]);
+      Alert.alert('Muted accounts', getApiMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   const filtered = useMemo(
     () =>
@@ -72,9 +92,15 @@ export default function MutedAccountsScreen({ navigation }: Props) {
   const noMatches = rows.length > 0 && filtered.length === 0;
   const fullyEmpty = rows.length === 0;
 
-  const unmute = (u: MutedUser) => {
-    setRows((prev) => prev.filter((x) => x.id !== u.id));
-    setConfirm(null);
+  const unmute = async (u: MutedUser) => {
+    try {
+      await apiSetMutedUser(u.id, false);
+      await refreshUser();
+      setRows((prev) => prev.filter((x) => x.id !== u.id));
+      setConfirm(null);
+    } catch (e) {
+      Alert.alert('Unmute', getApiMessage(e));
+    }
   };
 
   return (
@@ -109,7 +135,12 @@ export default function MutedAccountsScreen({ navigation }: Props) {
           />
         </View>
 
-        {fullyEmpty ? (
+        {loading ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#6366F1" />
+            <Text style={{ marginTop: 10, color: '#64748B' }}>Loading…</Text>
+          </View>
+        ) : fullyEmpty ? (
           <View style={styles.emptyWrap}>
             <View style={styles.emptyIconOuter}>
               <View style={styles.emptyIconInner}>
@@ -157,7 +188,10 @@ export default function MutedAccountsScreen({ navigation }: Props) {
         title={confirm ? `Unmute ${confirm.handle}?` : ''}
         message="Their posts and replies may show up again depending on your mood + AI settings."
         primaryLabel="Unmute"
-        onPrimary={() => confirm && unmute(confirm)}
+        onPrimary={async () => {
+          if (!confirm) return;
+          await unmute(confirm);
+        }}
         icon={
           <LinearGradient colors={[...GRADIENT]} style={styles.dialogIconGrad}>
             <Ionicons name="volume-medium" size={26} color="#fff" />

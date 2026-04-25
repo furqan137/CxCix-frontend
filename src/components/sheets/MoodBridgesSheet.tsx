@@ -9,10 +9,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Images } from '../../constants/images';
 import { MOOD_LABELS, type MoodId } from '../../constants/moods';
 import { BottomSheetModal } from '../ui/BottomSheetModal';
+import { apiGetExploreMood, type ApiFeedPost } from '../../api/posts';
+import { getApiMessage } from '../../api/auth';
 
 type Props = {
   visible: boolean;
@@ -47,23 +50,10 @@ const SUGGESTIONS: Array<{
   { label: 'Ready to engage?', target: 'debate', icon: 'chatbubbles-outline' },
 ];
 
-const CARDS = [
-  {
-    id: 'econ',
-    title: 'Global Economic\nTrends 2026',
-    image: Images.moodBridgeExplore.economy,
-  },
-  {
-    id: 'vr',
-    title: 'Tech Innovation\nSummit Results',
-    image: Images.moodBridgeExplore.tech,
-  },
-  {
-    id: 'dig',
-    title: 'The Future of Digital\nCurrency',
-    image: Images.moodBridgeExplore.digital,
-  },
-];
+function postThumb(p: ApiFeedPost) {
+  const url = p.media?.[0]?.url || p.mediaUrl;
+  return url ? { uri: url } : null;
+}
 
 /**
  * Mood Bridges — Figma-aligned chips, explore row, CTAs.
@@ -74,6 +64,54 @@ export function MoodBridgesSheet({
   currentMood,
   onSwitchMood,
 }: Props) {
+  const [explore, setExplore] = useState<{ calm: ApiFeedPost[]; serious: ApiFeedPost[]; creative: ApiFeedPost[] } | null>(
+    null,
+  );
+  const [exploreError, setExploreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    setExploreError(null);
+    void (async () => {
+      try {
+        const res = await apiGetExploreMood({ per: 6 });
+        if (!alive) return;
+        setExplore(res);
+      } catch (e) {
+        if (!alive) return;
+        setExplore(null);
+        setExploreError(getApiMessage(e));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [visible]);
+
+  const cards = useMemo(() => {
+    const make = (key: 'calm' | 'serious' | 'creative', title: string) => {
+      const p = explore?.[key]?.[0];
+      return {
+        id: key,
+        title,
+        post: p ?? null,
+        image: p ? postThumb(p) : null,
+        fallback:
+          key === 'calm'
+            ? Images.moodBridgeExplore.economy
+            : key === 'serious'
+              ? Images.moodBridgeExplore.tech
+              : Images.moodBridgeExplore.digital,
+      };
+    };
+    return [
+      make('calm', 'Calm picks\nfor you'),
+      make('serious', 'Serious picks\nfor you'),
+      make('creative', 'Creative picks\nfor you'),
+    ];
+  }, [explore]);
+
   return (
     <BottomSheetModal
       visible={visible}
@@ -122,19 +160,25 @@ export function MoodBridgesSheet({
           </Pressable>
         </View>
 
+        {exploreError ? (
+          <Text style={{ marginBottom: 8, color: '#64748b', fontSize: 12 }}>
+            {exploreError}
+          </Text>
+        ) : null}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.hScrollContent}
         >
-          {CARDS.map((c, idx) => (
+          {cards.map((c, idx) => (
             <View
               key={c.id}
-              style={[styles.card, idx < CARDS.length - 1 && { marginRight: CARD_GAP }]}
+              style={[styles.card, idx < cards.length - 1 && { marginRight: CARD_GAP }]}
             >
               <View style={styles.cardImageWrap}>
                 <Image
-                  source={c.image}
+                  source={c.image ?? c.fallback}
                   style={styles.cardImage}
                   resizeMode="cover"
                 />
